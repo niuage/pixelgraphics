@@ -1,10 +1,9 @@
-﻿using Aarthificial.PixelGraphics.Common;
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 namespace Aarthificial.PixelGraphics.Editor.Common
 {
-    [CustomPropertyDrawer(typeof(RenderingLayerMask))]
+    [CustomPropertyDrawer(typeof(PixelGraphics.Common.RenderingLayerMask))]
     public class RenderingLayerMaskPropertyDrawer : PropertyDrawer
     {
         private readonly string[] _options = new string[32];
