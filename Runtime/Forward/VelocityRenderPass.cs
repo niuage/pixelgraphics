@@ -32,6 +32,7 @@ namespace Aarthificial.PixelGraphics.Forward
             internal RendererListHandle rendererListHandleRenderingLayerMask;
             internal bool hasLayerMask;
             internal bool hasRenderingLayerMask;
+            internal bool hasEmitters; // Track if emitter pass ran
         }
 
         private readonly List<ShaderTagId> _shaderTagIdList = new List<ShaderTagId>();
@@ -96,8 +97,11 @@ namespace Aarthificial.PixelGraphics.Forward
             // Set the previous velocity texture so the shader can read it
             cmd.SetGlobalTexture(ShaderIds.PreviousVelocityTexture, data.previousVelocityTexture);
 
-            // Set the temporary velocity texture (current emitter data)
-            cmd.SetGlobalTexture(ShaderIds.TemporaryVelocityTexture, data.temporaryVelocityTexture);
+            // Only set temporary velocity texture if emitters ran
+            if (data.hasEmitters)
+            {
+                cmd.SetGlobalTexture(ShaderIds.TemporaryVelocityTexture, data.temporaryVelocityTexture);
+            }
 
             // Blit using fullscreen quad to apply velocity simulation
             cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
@@ -164,8 +168,8 @@ namespace Aarthificial.PixelGraphics.Forward
             RenderingUtils.ReAllocateHandleIfNeeded(ref _velocityTargetA, desc, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_PG_VelocityTarget_A");
             RenderingUtils.ReAllocateHandleIfNeeded(ref _velocityTargetB, desc, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_PG_VelocityTarget_B");
 
-            // Clear the textures on first use to prevent garbage data
-            if (!_texturesInitialized)
+            // Clear the textures on first use OR if resolution changed (to prevent garbage data)
+            if (!_texturesInitialized || _velocityTargetA.rt.width != textureWidth || _velocityTargetA.rt.height != textureHeight)
             {
                 _texturesInitialized = true;
 
@@ -220,6 +224,7 @@ namespace Aarthificial.PixelGraphics.Forward
             TextureHandle temporaryVelocityHandle = renderGraph.CreateTexture(tempVelocityDesc);
 
             // First pass: Draw emitters (write velocity data to temporary texture)
+            bool hasEmitters = false;
             if (!cameraData.isPreviewCamera && !cameraData.isSceneViewCamera)
             {
                 bool hasLayerMask = _passSettings.layerMask != 0;
@@ -229,6 +234,7 @@ namespace Aarthificial.PixelGraphics.Forward
 
                 if (hasLayerMask || hasRenderingLayerMask)
                 {
+                    hasEmitters = true;
                     using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Emitters", out var passData, _profilingSampler))
                     {
                         passData.emitterMaterial = _emitterMaterial;
@@ -300,13 +306,17 @@ namespace Aarthificial.PixelGraphics.Forward
                 passData.isPreviewCamera = cameraData.isPreviewCamera;
                 passData.isSceneViewCamera = cameraData.isSceneViewCamera;
                 passData.previousVelocityTexture = previousVelocityHandle;
-                passData.temporaryVelocityTexture = temporaryVelocityHandle;
+                passData.hasEmitters = hasEmitters;
 
                 // Read from previous velocity texture (last frame's result)
                 builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
 
-                // Read from temporary velocity texture (current emitter data)
-                builder.UseTexture(temporaryVelocityHandle, AccessFlags.Read);
+                // Only use temporary velocity texture if emitters ran
+                if (hasEmitters)
+                {
+                    passData.temporaryVelocityTexture = temporaryVelocityHandle;
+                    builder.UseTexture(temporaryVelocityHandle, AccessFlags.Read);
+                }
 
                 // Write to current velocity texture (simulation output)
                 builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
