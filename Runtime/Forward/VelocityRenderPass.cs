@@ -84,6 +84,8 @@ namespace Aarthificial.PixelGraphics.Forward
         {
             var cmd = context.cmd;
 
+            Debug.Log($"[VelocityRenderPass] ExecutePass called - rendering velocity simulation");
+
             // Set global shader parameters
             cmd.SetGlobalVector(ShaderIds.CameraPositionDelta, data.cameraPositionDelta);
             cmd.SetGlobalVector(ShaderIds.VelocitySimulationParams, data.simulationSettings.Value);
@@ -99,6 +101,8 @@ namespace Aarthificial.PixelGraphics.Forward
         private static void ExecuteRendererLists(PassData data, RasterGraphContext context)
         {
             var cmd = context.cmd;
+
+            Debug.Log($"[VelocityRenderPass] ExecuteRendererLists called - hasLayerMask: {data.hasLayerMask}, hasRenderingLayerMask: {data.hasRenderingLayerMask}");
 
             // Set shader parameter for emitters
             cmd.SetGlobalVector(ShaderIds.PositionDelta, data.cameraPositionDelta);
@@ -203,6 +207,8 @@ namespace Aarthificial.PixelGraphics.Forward
             {
                 bool hasLayerMask = _passSettings.layerMask != 0;
                 bool hasRenderingLayerMask = _passSettings.renderingLayerMask != 0;
+
+                Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}");
 
                 if (hasLayerMask || hasRenderingLayerMask)
                 {
