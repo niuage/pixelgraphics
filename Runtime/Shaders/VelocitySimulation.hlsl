@@ -31,6 +31,12 @@ float4 SimulateVelocity(float2 uv)
     float2 distance = previousData.xy;
     float2 velocity = previousData.zw;
 
+    // Add current frame's emitter velocity to the distance
+    // This is what creates the displacement that the spring will pull back
+    float4 temporaryData = SAMPLE_TEXTURE2D(_PG_TemporaryVelocityTexture, sampler_PG_TemporaryVelocityTexture, uv);
+    float2 emitterVelocity = temporaryData.zw;
+    distance += emitterVelocity;
+
     if (uv.x < offset.x
         || uv.x > 1 - offset.x
         || uv.y < offset.y

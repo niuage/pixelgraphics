@@ -50,13 +50,8 @@
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
+                // Get the simulated velocity (which already includes emitter data merged in)
                 float4 result = SimulateVelocity(input.uv);
-
-                float2 temporaryVelocity = SAMPLE_TEXTURE2D(_PG_TemporaryVelocityTexture, sampler_PG_TemporaryVelocityTexture, input.uv).zw;
-                if (abs(temporaryVelocity.x) > 0)
-                    result.z = temporaryVelocity.x;
-                if (abs(temporaryVelocity.y) > 0)
-                    result.w = temporaryVelocity.y;
 
                 // Preview visualization: remap velocity from [-1, 1] to [0, 1] for display
                 // Velocity is stored in zw components (xy is distance)
