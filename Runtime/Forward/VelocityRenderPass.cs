@@ -16,6 +16,7 @@ namespace Aarthificial.PixelGraphics.Forward
             internal Material emitterMaterial;
             internal Material blitMaterial;
             internal TextureHandle velocityTexture;
+            internal TextureHandle previousVelocityTexture;
             internal TextureHandle temporaryVelocityTexture;
             internal VelocityPassSettings passSettings;
             internal SimulationSettings simulationSettings;
@@ -90,6 +91,9 @@ namespace Aarthificial.PixelGraphics.Forward
             cmd.SetGlobalVector(ShaderIds.CameraPositionDelta, data.cameraPositionDelta);
             cmd.SetGlobalVector(ShaderIds.VelocitySimulationParams, data.simulationSettings.Value);
             cmd.SetGlobalVector(ShaderIds.PixelScreenParams, data.pixelScreenParams);
+
+            // CRITICAL: Set the previous velocity texture so the shader can read it
+            cmd.SetGlobalTexture(ShaderIds.PreviousVelocityTexture, data.previousVelocityTexture);
 
             // Blit using fullscreen quad to apply velocity simulation
             cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
@@ -182,18 +186,15 @@ namespace Aarthificial.PixelGraphics.Forward
                 passData.textureHeight = textureHeight;
                 passData.isPreviewCamera = cameraData.isPreviewCamera;
                 passData.isSceneViewCamera = cameraData.isSceneViewCamera;
+                passData.previousVelocityTexture = previousVelocityHandle;
 
-                // Prevent the pass from being culled
-                builder.AllowPassCulling(false);
-
-                // Use previous velocity texture as input
+                // Use previous velocity texture as input (this makes it available during the pass)
                 builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
-                builder.SetGlobalTextureAfterPass(previousVelocityHandle, ShaderIds.PreviousVelocityTexture);
 
                 // Set current velocity texture as output
                 builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
 
-                // Set velocity texture as global after this pass
+                // Set velocity textures as global AFTER this pass completes
                 builder.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
 
                 // Allow setting global shader variables in this pass
@@ -268,8 +269,38 @@ namespace Aarthificial.PixelGraphics.Forward
             // Preview pass (editor only)
             if (_passSettings.preview)
             {
-                var blitParams = new RenderGraphUtils.BlitMaterialParameters(currentVelocityHandle, resourceData.activeColorTexture, _blitMaterial, 1);
-                renderGraph.AddBlitPass(blitParams, "Velocity Preview");
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Preview Blit", out var passData, _profilingSampler))
+                {
+                    passData.blitMaterial = _blitMaterial;
+                    passData.textureWidth = textureWidth;
+                    passData.textureHeight = textureHeight;
+                    passData.viewMatrix = cameraData.GetViewMatrix();
+                    passData.projectionMatrix = cameraData.GetProjectionMatrix();
+
+                    // Use the velocity texture as input (this prevents it from being culled)
+                    builder.UseTexture(currentVelocityHandle, AccessFlags.Read);
+
+                    // Write to camera color target
+                    builder.SetRenderAttachment(resourceData.activeColorTexture, 0, AccessFlags.Write);
+
+                    // Allow pass culling to be disabled for debugging
+                    builder.AllowPassCulling(false);
+
+                    // Allow global state modification
+                    builder.AllowGlobalStateModification(true);
+
+                    builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                    {
+                        Debug.Log("[VelocityRenderPass] Preview pass executing");
+                        var cmd = context.cmd;
+
+                        // Draw fullscreen quad with the velocity visualization (pass 1 of blit shader)
+                        cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+                        cmd.SetViewport(new Rect(0, 0, data.textureWidth, data.textureHeight));
+                        cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, data.blitMaterial, 0, 1);
+                        cmd.SetViewProjectionMatrices(data.viewMatrix, data.projectionMatrix);
+                    });
+                }
             }
 #endif
         }
