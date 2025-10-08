@@ -128,7 +128,7 @@ namespace Aarthificial.PixelGraphics.Forward
             int textureHeight = Mathf.FloorToInt(cameraData.camera.pixelHeight * _passSettings.textureScale);
 
             // Debug: Log when passes are being recorded
-            Debug.Log($"[VelocityRenderPass] RecordRenderGraph called - Preview: {_passSettings.preview}, LayerMask: {_passSettings.layerMask.value}, RenderingLayerMask: {_passSettings.renderingLayerMask.value}");
+            Debug.Log($"[VelocityRenderPass] RecordRenderGraph called - Preview: {_passSettings.preview}, LayerMask: {_passSettings.layerMask.value}, RenderingLayerMask: {(uint)_passSettings.renderingLayerMask}");
 
             float height = 2 * cameraData.camera.orthographicSize * _passSettings.pixelsPerUnit;
             float width = height * cameraData.camera.aspect;
