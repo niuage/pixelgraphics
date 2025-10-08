@@ -6,7 +6,6 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.RenderGraphModule.Util;
-using UnityEngine.Rendering.RendererUtils;
 
 namespace Aarthificial.PixelGraphics.Forward
 {
@@ -215,17 +214,12 @@ namespace Aarthificial.PixelGraphics.Forward
                             filteringSettings.layerMask = _passSettings.layerMask;
                             filteringSettings.renderingLayerMask = uint.MaxValue;
 
-                            var rendererListDesc = new CoreRendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
-                            {
-                                sortingCriteria = SortingCriteria.CommonTransparent,
-                                renderQueueRange = RenderQueueRange.transparent,
-                                layerMask = filteringSettings.layerMask,
-                                renderingLayerMask = filteringSettings.renderingLayerMask,
-                                overrideMaterial = null,
-                                overrideMaterialPassIndex = 0
-                            };
+                            var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagIdList, renderingData, cameraData, lightData, SortingCriteria.CommonTransparent);
+                            drawSettings.overrideMaterial = null;
+                            drawSettings.overrideMaterialPassIndex = 0;
 
-                            passData.rendererListHandleLayerMask = renderGraph.CreateRendererList(rendererListDesc);
+                            var rendererListParams = new RendererListParams(renderingData.cullResults, drawSettings, filteringSettings);
+                            passData.rendererListHandleLayerMask = renderGraph.CreateRendererList(rendererListParams);
                             builder.UseRendererList(passData.rendererListHandleLayerMask);
                         }
 
@@ -235,17 +229,12 @@ namespace Aarthificial.PixelGraphics.Forward
                             filteringSettings.layerMask = -1;
                             filteringSettings.renderingLayerMask = _passSettings.renderingLayerMask;
 
-                            var rendererListDesc = new CoreRendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
-                            {
-                                sortingCriteria = SortingCriteria.CommonTransparent,
-                                renderQueueRange = RenderQueueRange.transparent,
-                                layerMask = filteringSettings.layerMask,
-                                renderingLayerMask = filteringSettings.renderingLayerMask,
-                                overrideMaterial = _emitterMaterial,
-                                overrideMaterialPassIndex = 0
-                            };
+                            var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagIdList, renderingData, cameraData, lightData, SortingCriteria.CommonTransparent);
+                            drawSettings.overrideMaterial = _emitterMaterial;
+                            drawSettings.overrideMaterialPassIndex = 0;
 
-                            passData.rendererListHandleRenderingLayerMask = renderGraph.CreateRendererList(rendererListDesc);
+                            var rendererListParams = new RendererListParams(renderingData.cullResults, drawSettings, filteringSettings);
+                            passData.rendererListHandleRenderingLayerMask = renderGraph.CreateRendererList(rendererListParams);
                             builder.UseRendererList(passData.rendererListHandleRenderingLayerMask);
                         }
 
