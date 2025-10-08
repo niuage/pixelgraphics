@@ -4,17 +4,36 @@ using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering.RenderGraphModule;
 
 namespace Aarthificial.PixelGraphics.Forward
 {
     public class VelocityRenderPass : ScriptableRenderPass
     {
+        private class PassData
+        {
+            internal Material emitterMaterial;
+            internal Material blitMaterial;
+            internal TextureHandle velocityTexture;
+            internal TextureHandle temporaryVelocityTexture;
+            internal VelocityPassSettings passSettings;
+            internal SimulationSettings simulationSettings;
+            internal Vector2 cameraPositionDelta;
+            internal Vector4 pixelScreenParams;
+            internal Matrix4x4 viewMatrix;
+            internal Matrix4x4 projectionMatrix;
+            internal int textureWidth;
+            internal int textureHeight;
+            internal bool isPreviewCamera;
+            internal bool isSceneViewCamera;
+            internal RendererListHandle rendererListHandleLayerMask;
+            internal RendererListHandle rendererListHandleRenderingLayerMask;
+            internal bool hasLayerMask;
+            internal bool hasRenderingLayerMask;
+        }
+
         private readonly List<ShaderTagId> _shaderTagIdList = new List<ShaderTagId>();
         private readonly ProfilingSampler _profilingSampler;
-        private readonly RTHandle _temporaryVelocityTarget;
-        private readonly RTHandle _velocityTarget;
-        private readonly int _temporaryVelocityTargetId;
-        private readonly int _velocityTargetId;
         private readonly Material _emitterMaterial;
         private readonly Material _blitMaterial;
 
@@ -23,15 +42,15 @@ namespace Aarthificial.PixelGraphics.Forward
         private FilteringSettings _filteringSettings;
         private Vector2 _previousPosition;
 
+        // RTHandles for persistent velocity textures (double buffering)
+        private RTHandle _velocityTargetA;
+        private RTHandle _velocityTargetB;
+        private bool _useTargetA = true;
+
         public VelocityRenderPass(Material emitterMaterial, Material blitMaterial)
         {
             _emitterMaterial = emitterMaterial;
             _blitMaterial = blitMaterial;
-
-            _temporaryVelocityTarget = RTHandles.Alloc("_PG_TemporaryVelocityTextureTarget", name: "_PG_TemporaryVelocityTextureTarget");
-            _velocityTarget = RTHandles.Alloc("_VelocityTarget", name: "_VelocityTarget");
-            _temporaryVelocityTargetId = Shader.PropertyToID(_temporaryVelocityTarget.name);
-            _velocityTargetId = Shader.PropertyToID(_velocityTarget.name);
 
             _shaderTagIdList.Add(new ShaderTagId("SRPDefaultUnlit"));
             _shaderTagIdList.Add(new ShaderTagId("UniversalForward"));
@@ -45,6 +64,12 @@ namespace Aarthificial.PixelGraphics.Forward
             renderPassEvent = RenderPassEvent.BeforeRenderingOpaques;
         }
 
+        public void Dispose()
+        {
+            _velocityTargetA?.Release();
+            _velocityTargetB?.Release();
+        }
+
         public void Setup(
             VelocityPassSettings passSettings,
             SimulationSettings simulationSettings
@@ -54,103 +79,191 @@ namespace Aarthificial.PixelGraphics.Forward
             _simulationSettings = simulationSettings;
         }
 
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+        private static void ExecutePass(PassData data, RasterGraphContext context)
         {
-            var cmd = CommandBufferPool.Get();
-            cmd.Clear();
+            var cmd = context.cmd;
 
-            using (new ProfilingScope(cmd, _profilingSampler))
+            // Set global shader parameters
+            cmd.SetGlobalVector(ShaderIds.CameraPositionDelta, data.cameraPositionDelta);
+            cmd.SetGlobalVector(ShaderIds.VelocitySimulationParams, data.simulationSettings.Value);
+            cmd.SetGlobalVector(ShaderIds.PixelScreenParams, data.pixelScreenParams);
+
+            // Blit using fullscreen quad to apply velocity simulation
+            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+            cmd.SetViewport(new Rect(0, 0, data.textureWidth, data.textureHeight));
+            cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, data.blitMaterial, 0, 0);
+            cmd.SetViewProjectionMatrices(data.viewMatrix, data.projectionMatrix);
+        }
+
+        private static void ExecuteRendererLists(PassData data, RasterGraphContext context)
+        {
+            var cmd = context.cmd;
+
+            // Set shader parameter for emitters
+            cmd.SetGlobalVector(ShaderIds.PositionDelta, data.cameraPositionDelta);
+
+            if (!data.isPreviewCamera && !data.isSceneViewCamera)
             {
-                ref var cameraData = ref renderingData.cameraData;
-
-                int textureWidth = Mathf.FloorToInt(cameraData.camera.pixelWidth * _passSettings.textureScale);
-                int textureHeight = Mathf.FloorToInt(cameraData.camera.pixelHeight * _passSettings.textureScale);
-
-                float height = 2 * cameraData.camera.orthographicSize * _passSettings.pixelsPerUnit;
-                float width = height * cameraData.camera.aspect;
-
-                var cameraPosition = (Vector2) cameraData.GetViewMatrix().GetColumn(3);
-                var delta = cameraPosition - _previousPosition;
-                var screenDelta = cameraData.GetProjectionMatrix() * cameraData.GetViewMatrix() * delta;
-                _previousPosition = cameraPosition;
-
-                cmd.GetTemporaryRT(
-                    _temporaryVelocityTargetId,
-                    textureWidth,
-                    textureHeight,
-                    0,
-                    FilterMode.Bilinear,
-                    GraphicsFormat.R16G16B16A16_SFloat
-                );
-                cmd.GetTemporaryRT(
-                    _velocityTargetId,
-                    textureWidth,
-                    textureHeight,
-                    0,
-                    FilterMode.Bilinear,
-                    GraphicsFormat.R16G16B16A16_SFloat
-                );
-
-                cmd.SetGlobalVector(ShaderIds.CameraPositionDelta, screenDelta / 2);
-                cmd.SetGlobalTexture(ShaderIds.VelocityTexture, _velocityTargetId);
-                cmd.SetGlobalTexture(ShaderIds.PreviousVelocityTexture, _temporaryVelocityTargetId);
-                cmd.SetGlobalVector(ShaderIds.VelocitySimulationParams, _simulationSettings.Value);
-                cmd.SetGlobalVector(
-                    ShaderIds.PixelScreenParams,
-                    new Vector4(
-                        width,
-                        height,
-                        _passSettings.pixelsPerUnit,
-                        1 / _passSettings.pixelsPerUnit
-                    )
-                );
-
-                CoreUtils.SetRenderTarget(cmd, _velocityTargetId);
-                cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
-                cmd.SetViewport(new Rect(0, 0, textureWidth, textureHeight));
-                cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, _blitMaterial, 0, 0);
-                cmd.SetViewProjectionMatrices(cameraData.GetViewMatrix(), cameraData.GetProjectionMatrix());
-                context.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-
-                if (!cameraData.isPreviewCamera && !cameraData.isSceneViewCamera)
+                if (data.hasLayerMask)
                 {
-                    var drawingSettings = CreateDrawingSettings(
-                        _shaderTagIdList,
-                        ref renderingData,
-                        SortingCriteria.CommonTransparent
-                    );
-
-                    if (_passSettings.layerMask != 0)
-                    {
-                        _filteringSettings.layerMask = _passSettings.layerMask;
-                        _filteringSettings.renderingLayerMask = uint.MaxValue;
-                        drawingSettings.overrideMaterial = null;
-                        context.DrawRenderers(renderingData.cullResults, ref drawingSettings, ref _filteringSettings);
-                    }
-
-                    if (_passSettings.renderingLayerMask != 0)
-                    {
-                        _filteringSettings.layerMask = -1;
-                        _filteringSettings.renderingLayerMask = _passSettings.renderingLayerMask;
-                        drawingSettings.overrideMaterial = _emitterMaterial;
-                        context.DrawRenderers(renderingData.cullResults, ref drawingSettings, ref _filteringSettings);
-                    }
+                    cmd.DrawRendererList(data.rendererListHandleLayerMask);
                 }
 
-                // TODO Implement proper double buffering
-                cmd.Blit(_velocityTargetId, _temporaryVelocityTargetId);
-#if UNITY_EDITOR
-                if (_passSettings.preview)
-                    cmd.Blit(_velocityTargetId, colorAttachmentHandle);
-#endif
-                CoreUtils.SetRenderTarget(cmd, colorAttachmentHandle);
-                cmd.ReleaseTemporaryRT(_temporaryVelocityTargetId);
-                cmd.ReleaseTemporaryRT(_velocityTargetId);
+                if (data.hasRenderingLayerMask)
+                {
+                    cmd.DrawRendererList(data.rendererListHandleRenderingLayerMask);
+                }
+            }
+        }
+
+        public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
+        {
+            UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
+            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
+            UniversalRenderingData renderingData = frameData.Get<UniversalRenderingData>();
+            UniversalLightData lightData = frameData.Get<UniversalLightData>();
+
+            int textureWidth = Mathf.FloorToInt(cameraData.camera.pixelWidth * _passSettings.textureScale);
+            int textureHeight = Mathf.FloorToInt(cameraData.camera.pixelHeight * _passSettings.textureScale);
+
+            float height = 2 * cameraData.camera.orthographicSize * _passSettings.pixelsPerUnit;
+            float width = height * cameraData.camera.aspect;
+
+            var cameraPosition = (Vector2)cameraData.GetViewMatrix().GetColumn(3);
+            var delta = cameraPosition - _previousPosition;
+            var screenDelta = cameraData.GetProjectionMatrix() * cameraData.GetViewMatrix() * delta;
+            _previousPosition = cameraPosition;
+
+            // Create texture descriptor
+            var desc = new RenderTextureDescriptor(
+                textureWidth,
+                textureHeight,
+                GraphicsFormat.R16G16B16A16_SFloat,
+                0
+            );
+            desc.msaaSamples = 1;
+            desc.enableRandomWrite = false;
+
+            // Allocate or reallocate RTHandles for double buffering
+            RenderingUtils.ReAllocateHandleIfNeeded(ref _velocityTargetA, desc, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_PG_VelocityTarget_A");
+            RenderingUtils.ReAllocateHandleIfNeeded(ref _velocityTargetB, desc, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_PG_VelocityTarget_B");
+
+            // Determine which targets to use for this frame
+            RTHandle currentVelocityTarget = _useTargetA ? _velocityTargetA : _velocityTargetB;
+            RTHandle previousVelocityTarget = _useTargetA ? _velocityTargetB : _velocityTargetA;
+
+            // Flip for next frame
+            _useTargetA = !_useTargetA;
+
+            // Import the RTHandles into the render graph
+            TextureHandle currentVelocityHandle = renderGraph.ImportTexture(currentVelocityTarget);
+            TextureHandle previousVelocityHandle = renderGraph.ImportTexture(previousVelocityTarget);
+
+            // Set global textures for shaders to access
+            // Note: We set these before the pass so they're available globally
+            renderGraph.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
+
+            // First pass: Simulate velocity
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Simulation", out var passData, _profilingSampler))
+            {
+                passData.blitMaterial = _blitMaterial;
+                passData.emitterMaterial = _emitterMaterial;
+                passData.passSettings = _passSettings;
+                passData.simulationSettings = _simulationSettings;
+                passData.cameraPositionDelta = screenDelta / 2;
+                passData.pixelScreenParams = new Vector4(width, height, _passSettings.pixelsPerUnit, 1 / _passSettings.pixelsPerUnit);
+                passData.viewMatrix = cameraData.GetViewMatrix();
+                passData.projectionMatrix = cameraData.GetProjectionMatrix();
+                passData.textureWidth = textureWidth;
+                passData.textureHeight = textureHeight;
+                passData.isPreviewCamera = cameraData.isPreviewCamera;
+                passData.isSceneViewCamera = cameraData.isSceneViewCamera;
+
+                // Use previous velocity texture as input
+                builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
+                builder.SetGlobalTextureAfterPass(previousVelocityHandle, ShaderIds.PreviousVelocityTexture);
+
+                // Set current velocity texture as output
+                builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
+
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePass(data, context));
             }
 
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
+            // Second pass: Draw emitters
+            if (!cameraData.isPreviewCamera && !cameraData.isSceneViewCamera)
+            {
+                bool hasLayerMask = _passSettings.layerMask != 0;
+                bool hasRenderingLayerMask = _passSettings.renderingLayerMask != 0;
+
+                if (hasLayerMask || hasRenderingLayerMask)
+                {
+                    using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Emitters", out var passData, _profilingSampler))
+                    {
+                        passData.emitterMaterial = _emitterMaterial;
+                        passData.passSettings = _passSettings;
+                        passData.cameraPositionDelta = screenDelta / 2;
+                        passData.isPreviewCamera = cameraData.isPreviewCamera;
+                        passData.isSceneViewCamera = cameraData.isSceneViewCamera;
+                        passData.hasLayerMask = hasLayerMask;
+                        passData.hasRenderingLayerMask = hasRenderingLayerMask;
+
+                        // Create renderer lists for emitters
+                        if (hasLayerMask)
+                        {
+                            var filteringSettings = _filteringSettings;
+                            filteringSettings.layerMask = _passSettings.layerMask;
+                            filteringSettings.renderingLayerMask = uint.MaxValue;
+
+                            var rendererListDesc = new RendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
+                            {
+                                sortingCriteria = SortingCriteria.CommonTransparent,
+                                renderQueueRange = RenderQueueRange.transparent,
+                                layerMask = filteringSettings.layerMask,
+                                renderingLayerMask = filteringSettings.renderingLayerMask,
+                                overrideMaterial = null,
+                                overrideMaterialPassIndex = 0
+                            };
+
+                            passData.rendererListHandleLayerMask = renderGraph.CreateRendererList(rendererListDesc);
+                            builder.UseRendererList(passData.rendererListHandleLayerMask);
+                        }
+
+                        if (hasRenderingLayerMask)
+                        {
+                            var filteringSettings = _filteringSettings;
+                            filteringSettings.layerMask = -1;
+                            filteringSettings.renderingLayerMask = _passSettings.renderingLayerMask;
+
+                            var rendererListDesc = new RendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
+                            {
+                                sortingCriteria = SortingCriteria.CommonTransparent,
+                                renderQueueRange = RenderQueueRange.transparent,
+                                layerMask = filteringSettings.layerMask,
+                                renderingLayerMask = filteringSettings.renderingLayerMask,
+                                overrideMaterial = _emitterMaterial,
+                                overrideMaterialPassIndex = 0
+                            };
+
+                            passData.rendererListHandleRenderingLayerMask = renderGraph.CreateRendererList(rendererListDesc);
+                            builder.UseRendererList(passData.rendererListHandleRenderingLayerMask);
+                        }
+
+                        // Write to current velocity texture
+                        builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
+
+                        builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecuteRendererLists(data, context));
+                    }
+                }
+            }
+
+#if UNITY_EDITOR
+            // Preview pass (editor only)
+            if (_passSettings.preview)
+            {
+                var para = new RenderGraphUtils.BlitMaterialParameters(currentVelocityHandle, resourceData.activeColorTexture, _blitMaterial, 0);
+                renderGraph.AddBlitPass(para, passName: "Velocity Preview");
+            }
+#endif
         }
     }
 }

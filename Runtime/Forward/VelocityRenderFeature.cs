@@ -43,5 +43,12 @@ namespace Aarthificial.PixelGraphics.Forward
             _pass.Setup(settings, simulation);
             renderer.EnqueuePass(_pass);
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            _pass?.Dispose();
+            CoreUtils.Destroy(_emitterMaterial);
+            CoreUtils.Destroy(_blitMaterial);
+        }
     }
 }
