@@ -51,12 +51,21 @@ float4 SimulateVelocity(float2 uv)
     if (abs(emitterVelocity.x) > 0.0001 || abs(emitterVelocity.y) > 0.0001)
     {
         distance += emitterVelocity;
+        velocity = emitterVelocity; // Set velocity directly for simple decay mode
     }
 
+    // SIMPLE EXPONENTIAL DECAY (for testing)
+    // Comment this block and uncomment the spring physics block below to switch
+    float decayRate = 0.95; // 0.95 = keep 95% each frame (adjust between 0.8-0.98)
+    velocity *= decayRate;
+    distance *= decayRate;
+
+    /* SPRING PHYSICS (original - currently disabled for testing)
     float dt = min(unity_DeltaTime.x, _PG_VelocitySimulationParams.w);
     float2 acceleration = -distance * _PG_VelocitySimulationParams.x - velocity * _PG_VelocitySimulationParams.y;
     velocity += acceleration * dt;
     distance += velocity * dt;
+    */
 
     // Clamp extremely small values to exactly zero to prevent floating point drift
     if (abs(distance.x) < 0.0001) distance.x = 0;
