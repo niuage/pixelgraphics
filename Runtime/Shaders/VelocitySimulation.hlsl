@@ -56,13 +56,10 @@ float4 SimulateVelocity(float2 uv)
     }
 
     // SIMPLE EXPONENTIAL DECAY (for testing)
-    // Time-based decay instead of frame-based to maintain consistent behavior across different frame rates
-    float dt = unity_DeltaTime.x; // Delta time in seconds
-    float halfLife = 0.3; // Time in seconds for value to decay to 50% (adjust between 0.1-1.0)
-    float decayFactor = exp(-0.693147 / halfLife * dt); // ln(2) = 0.693147
-
-    velocity *= decayFactor;
-    distance *= decayFactor;
+    // Very slow decay rate to ensure trails are visible at any frame rate
+    float decayRate = 0.98; // Keep 98% each frame - slower decay
+    velocity *= decayRate;
+    distance *= decayRate;
 
     /* SPRING PHYSICS (original - currently disabled for testing)
     float dt = min(unity_DeltaTime.x, _PG_VelocitySimulationParams.w);

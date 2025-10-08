@@ -143,10 +143,15 @@ namespace Aarthificial.PixelGraphics.Forward
             int textureWidth = Mathf.FloorToInt(cameraData.camera.pixelWidth * _passSettings.textureScale);
             int textureHeight = Mathf.FloorToInt(cameraData.camera.pixelHeight * _passSettings.textureScale);
 
-            // Debug: Log camera info to diagnose window size issue
-            Debug.Log($"[VelocityRenderPass] Camera: {cameraData.camera.name}, Resolution: {cameraData.camera.pixelWidth}x{cameraData.camera.pixelHeight}, " +
-                      $"isPreviewCamera: {cameraData.isPreviewCamera}, isSceneViewCamera: {cameraData.isSceneViewCamera}, " +
-                      $"CameraType: {cameraData.camera.cameraType}");
+#if UNITY_EDITOR
+            // Debug: Log camera info to diagnose window size issue (only in Play mode)
+            if (UnityEditor.EditorApplication.isPlaying)
+            {
+                Debug.Log($"[VelocityRenderPass] Camera: {cameraData.camera.name}, Resolution: {cameraData.camera.pixelWidth}x{cameraData.camera.pixelHeight}, " +
+                          $"isPreviewCamera: {cameraData.isPreviewCamera}, isSceneViewCamera: {cameraData.isSceneViewCamera}, " +
+                          $"CameraType: {cameraData.camera.cameraType}");
+            }
+#endif
 
             float height = 2 * cameraData.camera.orthographicSize * _passSettings.pixelsPerUnit;
             float width = height * cameraData.camera.aspect;
@@ -232,7 +237,12 @@ namespace Aarthificial.PixelGraphics.Forward
                 bool hasLayerMask = _passSettings.layerMask != 0;
                 bool hasRenderingLayerMask = _passSettings.renderingLayerMask != 0;
 
-                Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}, Camera: {cameraData.camera.name}, PixelWidth: {cameraData.camera.pixelWidth}");
+#if UNITY_EDITOR
+                if (UnityEditor.EditorApplication.isPlaying)
+                {
+                    Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}, Camera: {cameraData.camera.name}, PixelWidth: {cameraData.camera.pixelWidth}");
+                }
+#endif
 
                 if (hasLayerMask || hasRenderingLayerMask)
                 {
