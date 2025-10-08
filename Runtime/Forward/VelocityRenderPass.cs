@@ -230,7 +230,7 @@ namespace Aarthificial.PixelGraphics.Forward
                 bool hasLayerMask = _passSettings.layerMask != 0;
                 bool hasRenderingLayerMask = _passSettings.renderingLayerMask != 0;
 
-                // Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}");
+                Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}, Camera: {cameraData.camera.name}, PixelWidth: {cameraData.camera.pixelWidth}");
 
                 if (hasLayerMask || hasRenderingLayerMask)
                 {

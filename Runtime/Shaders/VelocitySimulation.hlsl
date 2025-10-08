@@ -47,18 +47,22 @@ float4 SimulateVelocity(float2 uv)
     float4 temporaryData = SAMPLE_TEXTURE2D(_PG_TemporaryVelocityTexture, sampler_PG_TemporaryVelocityTexture, uv);
     float2 emitterVelocity = temporaryData.zw;
 
-    // Only add emitter velocity if it's significant (avoid accumulating tiny floating point errors)
+    // Add emitter velocity if significant (this creates new displacement)
     if (abs(emitterVelocity.x) > 0.0001 || abs(emitterVelocity.y) > 0.0001)
     {
         distance += emitterVelocity;
-        velocity = emitterVelocity; // Set velocity directly for simple decay mode
+        // For simple decay, velocity tracks the change in distance
+        velocity = emitterVelocity;
     }
 
     // SIMPLE EXPONENTIAL DECAY (for testing)
-    // Comment this block and uncomment the spring physics block below to switch
-    float decayRate = 0.8; // 0.95 = keep 95% each frame (adjust between 0.8-0.98)
-    velocity *= decayRate;
-    distance *= decayRate;
+    // Time-based decay instead of frame-based to maintain consistent behavior across different frame rates
+    float dt = unity_DeltaTime.x; // Delta time in seconds
+    float halfLife = 0.3; // Time in seconds for value to decay to 50% (adjust between 0.1-1.0)
+    float decayFactor = exp(-0.693147 / halfLife * dt); // ln(2) = 0.693147
+
+    velocity *= decayFactor;
+    distance *= decayFactor;
 
     /* SPRING PHYSICS (original - currently disabled for testing)
     float dt = min(unity_DeltaTime.x, _PG_VelocitySimulationParams.w);
