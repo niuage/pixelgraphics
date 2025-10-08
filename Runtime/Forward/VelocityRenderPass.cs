@@ -186,6 +186,9 @@ namespace Aarthificial.PixelGraphics.Forward
                 // Set velocity texture as global after this pass
                 builder.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
 
+                // Allow setting global shader variables in this pass
+                builder.AllowGlobalStateModification(true);
+
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePass(data, context));
             }
 
@@ -240,6 +243,9 @@ namespace Aarthificial.PixelGraphics.Forward
 
                         // Write to current velocity texture
                         builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
+
+                        // Allow setting global shader variables in this pass
+                        builder.AllowGlobalStateModification(true);
 
                         builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecuteRendererLists(data, context));
                     }
