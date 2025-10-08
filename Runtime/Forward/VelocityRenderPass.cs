@@ -5,6 +5,8 @@ using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.Rendering.RenderGraphModule;
+using UnityEngine.Rendering.RenderGraphModule.Util;
+using UnityEngine.Rendering.RendererUtils;
 
 namespace Aarthificial.PixelGraphics.Forward
 {
@@ -159,10 +161,6 @@ namespace Aarthificial.PixelGraphics.Forward
             TextureHandle currentVelocityHandle = renderGraph.ImportTexture(currentVelocityTarget);
             TextureHandle previousVelocityHandle = renderGraph.ImportTexture(previousVelocityTarget);
 
-            // Set global textures for shaders to access
-            // Note: We set these before the pass so they're available globally
-            renderGraph.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
-
             // First pass: Simulate velocity
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Simulation", out var passData, _profilingSampler))
             {
@@ -185,6 +183,9 @@ namespace Aarthificial.PixelGraphics.Forward
 
                 // Set current velocity texture as output
                 builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
+
+                // Set velocity texture as global after this pass
+                builder.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePass(data, context));
             }
@@ -214,7 +215,7 @@ namespace Aarthificial.PixelGraphics.Forward
                             filteringSettings.layerMask = _passSettings.layerMask;
                             filteringSettings.renderingLayerMask = uint.MaxValue;
 
-                            var rendererListDesc = new RendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
+                            var rendererListDesc = new CoreRendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
                             {
                                 sortingCriteria = SortingCriteria.CommonTransparent,
                                 renderQueueRange = RenderQueueRange.transparent,
@@ -234,7 +235,7 @@ namespace Aarthificial.PixelGraphics.Forward
                             filteringSettings.layerMask = -1;
                             filteringSettings.renderingLayerMask = _passSettings.renderingLayerMask;
 
-                            var rendererListDesc = new RendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
+                            var rendererListDesc = new CoreRendererListDesc(_shaderTagIdList[0], renderingData.cullResults, cameraData.camera)
                             {
                                 sortingCriteria = SortingCriteria.CommonTransparent,
                                 renderQueueRange = RenderQueueRange.transparent,
@@ -260,8 +261,8 @@ namespace Aarthificial.PixelGraphics.Forward
             // Preview pass (editor only)
             if (_passSettings.preview)
             {
-                var para = new RenderGraphUtils.BlitMaterialParameters(currentVelocityHandle, resourceData.activeColorTexture, _blitMaterial, 0);
-                renderGraph.AddBlitPass(para, passName: "Velocity Preview");
+                var blitParams = new RenderGraphUtils.BlitMaterialParameters(currentVelocityHandle, resourceData.activeColorTexture, _blitMaterial, 1);
+                renderGraph.AddBlitPass(blitParams, "Velocity Preview");
             }
 #endif
         }
