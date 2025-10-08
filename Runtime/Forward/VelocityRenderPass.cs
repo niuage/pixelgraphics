@@ -161,6 +161,17 @@ namespace Aarthificial.PixelGraphics.Forward
             var screenDelta = cameraData.GetProjectionMatrix() * cameraData.GetViewMatrix() * delta;
             _previousPosition = cameraPosition;
 
+            // Set camera position delta as global shader property for grass/displacement shaders
+            // This needs to be available to ALL shaders, not just the velocity passes
+            Shader.SetGlobalVector(ShaderIds.CameraPositionDelta, screenDelta / 2);
+
+#if UNITY_EDITOR
+            if (UnityEditor.EditorApplication.isPlaying && delta.magnitude > 0.01f)
+            {
+                Debug.Log($"[VelocityRenderPass] Camera moved! Delta: {delta}, ScreenDelta: {screenDelta}, ScreenDelta/2: {screenDelta / 2f}");
+            }
+#endif
+
             // Create texture descriptor
             var desc = new RenderTextureDescriptor(
                 textureWidth,

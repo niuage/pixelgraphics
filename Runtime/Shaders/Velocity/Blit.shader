@@ -49,12 +49,23 @@
             TEXTURE2D(_PG_VelocityTexture);
             SAMPLER(sampler_PG_VelocityTexture);
 
+            // Add camera delta for debugging
+            float4 _PG_CameraPositionDelta;
+
             float4 Fragment(Varyings input) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 // Read the FINAL simulated velocity texture (not re-simulate!)
                 float4 result = SAMPLE_TEXTURE2D(_PG_VelocityTexture, sampler_PG_VelocityTexture, input.uv);
+
+                // DEBUG: Show camera delta in top-left corner
+                if (input.uv.x < 0.2 && input.uv.y > 0.8)
+                {
+                    // Visualize camera delta magnitude
+                    float deltaMag = length(_PG_CameraPositionDelta.xy) * 100.0; // Scale up for visibility
+                    return float4(deltaMag, deltaMag, 0, 1);
+                }
 
                 // Preview visualization: remap velocity from [-1, 1] to [0, 1] for display
                 // Velocity is stored in zw components (xy is distance)
