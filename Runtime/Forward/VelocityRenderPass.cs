@@ -92,8 +92,11 @@ namespace Aarthificial.PixelGraphics.Forward
             cmd.SetGlobalVector(ShaderIds.VelocitySimulationParams, data.simulationSettings.Value);
             cmd.SetGlobalVector(ShaderIds.PixelScreenParams, data.pixelScreenParams);
 
-            // CRITICAL: Set the previous velocity texture so the shader can read it
+            // Set the previous velocity texture so the shader can read it
             cmd.SetGlobalTexture(ShaderIds.PreviousVelocityTexture, data.previousVelocityTexture);
+
+            // Set the temporary velocity texture (current emitter data)
+            cmd.SetGlobalTexture(ShaderIds.TemporaryVelocityTexture, data.temporaryVelocityTexture);
 
             // Blit using fullscreen quad to apply velocity simulation
             cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
@@ -171,7 +174,17 @@ namespace Aarthificial.PixelGraphics.Forward
             TextureHandle currentVelocityHandle = renderGraph.ImportTexture(currentVelocityTarget);
             TextureHandle previousVelocityHandle = renderGraph.ImportTexture(previousVelocityTarget);
 
-            // First pass: Draw emitters (write velocity data)
+            // Create a temporary texture for emitter data
+            var tempVelocityDesc = new TextureDesc(textureWidth, textureHeight)
+            {
+                colorFormat = GraphicsFormat.R16G16B16A16_SFloat,
+                clearBuffer = true,
+                clearColor = Color.clear,
+                name = "Temporary Velocity"
+            };
+            TextureHandle temporaryVelocityHandle = renderGraph.CreateTexture(tempVelocityDesc);
+
+            // First pass: Draw emitters (write velocity data to temporary texture)
             if (!cameraData.isPreviewCamera && !cameraData.isSceneViewCamera)
             {
                 bool hasLayerMask = _passSettings.layerMask != 0;
@@ -222,8 +235,11 @@ namespace Aarthificial.PixelGraphics.Forward
                             builder.UseRendererList(passData.rendererListHandleRenderingLayerMask);
                         }
 
-                        // Write to current velocity texture (emitters write their velocity)
-                        builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
+                        // Write to TEMPORARY velocity texture (emitters write their velocity here)
+                        builder.SetRenderAttachment(temporaryVelocityHandle, 0, AccessFlags.Write);
+
+                        // Set as global texture so simulation can read it
+                        builder.SetGlobalTextureAfterPass(temporaryVelocityHandle, ShaderIds.TemporaryVelocityTexture);
 
                         // Allow setting global shader variables in this pass
                         builder.AllowGlobalStateModification(true);
@@ -233,7 +249,7 @@ namespace Aarthificial.PixelGraphics.Forward
                 }
             }
 
-            // Second pass: Simulate velocity (process the emitter data)
+            // Second pass: Simulate velocity (combine previous frame + current emitter data)
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Simulation", out var passData, _profilingSampler))
             {
                 passData.blitMaterial = _blitMaterial;
@@ -249,12 +265,15 @@ namespace Aarthificial.PixelGraphics.Forward
                 passData.isPreviewCamera = cameraData.isPreviewCamera;
                 passData.isSceneViewCamera = cameraData.isSceneViewCamera;
                 passData.previousVelocityTexture = previousVelocityHandle;
+                passData.temporaryVelocityTexture = temporaryVelocityHandle;
 
-                // Use previous velocity texture as input
+                // Read from previous velocity texture (last frame's result)
                 builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
 
-                // Set current velocity texture as output - Don't use UseTexture, just SetRenderAttachment
-                // The emitter pass wrote to it, now simulation will overwrite it
+                // Read from temporary velocity texture (current emitter data)
+                builder.UseTexture(temporaryVelocityHandle, AccessFlags.Read);
+
+                // Write to current velocity texture (simulation output)
                 builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
 
                 // Set velocity textures as global AFTER this pass completes
