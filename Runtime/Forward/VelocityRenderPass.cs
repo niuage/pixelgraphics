@@ -296,12 +296,9 @@ namespace Aarthificial.PixelGraphics.Forward
                     passData.textureHeight = cameraData.camera.pixelHeight; // Use screen height, not texture height
                     passData.viewMatrix = cameraData.GetViewMatrix();
                     passData.projectionMatrix = cameraData.GetProjectionMatrix();
-                    passData.previousVelocityTexture = currentVelocityHandle;  // Preview reads the simulation result
-                    passData.temporaryVelocityTexture = temporaryVelocityHandle;  // Also show current emitters
 
-                    // Use the velocity textures as input
+                    // Use the velocity texture as input (this prevents it from being culled)
                     builder.UseTexture(currentVelocityHandle, AccessFlags.Read);
-                    builder.UseTexture(temporaryVelocityHandle, AccessFlags.Read);
 
                     // Write to camera color target
                     builder.SetRenderAttachment(resourceData.activeColorTexture, 0, AccessFlags.Write);
@@ -317,13 +314,11 @@ namespace Aarthificial.PixelGraphics.Forward
                         Debug.Log("[VelocityRenderPass] Preview pass executing");
                         var cmd = context.cmd;
 
-                        // Set textures for the preview shader to read
-                        cmd.SetGlobalTexture(ShaderIds.PreviousVelocityTexture, data.previousVelocityTexture);
-                        cmd.SetGlobalTexture(ShaderIds.TemporaryVelocityTexture, data.temporaryVelocityTexture);
-
                         // Draw fullscreen quad with the velocity visualization (pass 1 of blit shader)
-                        // Use Blit which handles viewport correctly
-                        Blitter.BlitTexture(cmd, data.previousVelocityTexture, new Vector4(1, 1, 0, 0), data.blitMaterial, 1);
+                        cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+                        cmd.SetViewport(new Rect(0, 0, data.textureWidth, data.textureHeight));
+                        cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, data.blitMaterial, 0, 1);
+                        cmd.SetViewProjectionMatrices(data.viewMatrix, data.projectionMatrix);
                     });
                 }
             }
