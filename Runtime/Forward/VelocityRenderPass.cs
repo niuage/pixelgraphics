@@ -48,6 +48,7 @@ namespace Aarthificial.PixelGraphics.Forward
         private RTHandle _velocityTargetA;
         private RTHandle _velocityTargetB;
         private bool _useTargetA = true;
+        private bool _texturesInitialized = false;
 
         public VelocityRenderPass(Material emitterMaterial, Material blitMaterial)
         {
@@ -162,6 +163,40 @@ namespace Aarthificial.PixelGraphics.Forward
             // Allocate or reallocate RTHandles for double buffering
             RenderingUtils.ReAllocateHandleIfNeeded(ref _velocityTargetA, desc, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_PG_VelocityTarget_A");
             RenderingUtils.ReAllocateHandleIfNeeded(ref _velocityTargetB, desc, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_PG_VelocityTarget_B");
+
+            // Clear the textures on first use to prevent garbage data
+            if (!_texturesInitialized)
+            {
+                _texturesInitialized = true;
+
+                // Add clear passes for both buffers
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>("Clear Velocity Textures", out var passData, _profilingSampler))
+                {
+                    var tempHandleA = renderGraph.ImportTexture(_velocityTargetA);
+                    var tempHandleB = renderGraph.ImportTexture(_velocityTargetB);
+
+                    builder.SetRenderAttachment(tempHandleA, 0, AccessFlags.Write);
+                    builder.AllowPassCulling(false);
+
+                    builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                    {
+                        context.cmd.ClearRenderTarget(true, true, Color.clear);
+                    });
+                }
+
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>("Clear Velocity Textures B", out var passData, _profilingSampler))
+                {
+                    var tempHandleB = renderGraph.ImportTexture(_velocityTargetB);
+
+                    builder.SetRenderAttachment(tempHandleB, 0, AccessFlags.Write);
+                    builder.AllowPassCulling(false);
+
+                    builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                    {
+                        context.cmd.ClearRenderTarget(true, true, Color.clear);
+                    });
+                }
+            }
 
             // Determine which targets to use for this frame
             RTHandle currentVelocityTarget = _useTargetA ? _velocityTargetA : _velocityTargetB;
