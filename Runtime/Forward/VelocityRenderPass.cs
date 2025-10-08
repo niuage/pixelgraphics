@@ -85,7 +85,7 @@ namespace Aarthificial.PixelGraphics.Forward
         {
             var cmd = context.cmd;
 
-            Debug.Log($"[VelocityRenderPass] ExecutePass called - rendering velocity simulation");
+            // Debug.Log($"[VelocityRenderPass] ExecutePass called - rendering velocity simulation");
 
             // Set global shader parameters
             cmd.SetGlobalVector(ShaderIds.CameraPositionDelta, data.cameraPositionDelta);
@@ -109,7 +109,7 @@ namespace Aarthificial.PixelGraphics.Forward
         {
             var cmd = context.cmd;
 
-            Debug.Log($"[VelocityRenderPass] ExecuteRendererLists called - hasLayerMask: {data.hasLayerMask}, hasRenderingLayerMask: {data.hasRenderingLayerMask}");
+            // Debug.Log($"[VelocityRenderPass] ExecuteRendererLists called - hasLayerMask: {data.hasLayerMask}, hasRenderingLayerMask: {data.hasRenderingLayerMask}");
 
             // Set shader parameter for emitters
             cmd.SetGlobalVector(ShaderIds.PositionDelta, data.cameraPositionDelta);
@@ -139,7 +139,7 @@ namespace Aarthificial.PixelGraphics.Forward
             int textureHeight = Mathf.FloorToInt(cameraData.camera.pixelHeight * _passSettings.textureScale);
 
             // Debug: Log when passes are being recorded
-            Debug.Log($"[VelocityRenderPass] RecordRenderGraph called - Preview: {_passSettings.preview}, LayerMask: {_passSettings.layerMask.value}, RenderingLayerMask: {(uint)_passSettings.renderingLayerMask}");
+            // Debug.Log($"[VelocityRenderPass] RecordRenderGraph called - Preview: {_passSettings.preview}, LayerMask: {_passSettings.layerMask.value}, RenderingLayerMask: {(uint)_passSettings.renderingLayerMask}");
 
             float height = 2 * cameraData.camera.orthographicSize * _passSettings.pixelsPerUnit;
             float width = height * cameraData.camera.aspect;
@@ -190,7 +190,7 @@ namespace Aarthificial.PixelGraphics.Forward
                 bool hasLayerMask = _passSettings.layerMask != 0;
                 bool hasRenderingLayerMask = _passSettings.renderingLayerMask != 0;
 
-                Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}");
+                // Debug.Log($"[VelocityRenderPass] Emitter check - hasLayerMask: {hasLayerMask}, hasRenderingLayerMask: {hasRenderingLayerMask}");
 
                 if (hasLayerMask || hasRenderingLayerMask)
                 {
@@ -311,7 +311,7 @@ namespace Aarthificial.PixelGraphics.Forward
 
                     builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                     {
-                        Debug.Log("[VelocityRenderPass] Preview pass executing");
+                        // Debug.Log("[VelocityRenderPass] Preview pass executing");
                         var cmd = context.cmd;
 
                         // Draw fullscreen quad with the velocity visualization (pass 1 of blit shader)
