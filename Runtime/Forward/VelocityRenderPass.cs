@@ -171,39 +171,7 @@ namespace Aarthificial.PixelGraphics.Forward
             TextureHandle currentVelocityHandle = renderGraph.ImportTexture(currentVelocityTarget);
             TextureHandle previousVelocityHandle = renderGraph.ImportTexture(previousVelocityTarget);
 
-            // First pass: Simulate velocity
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Simulation", out var passData, _profilingSampler))
-            {
-                passData.blitMaterial = _blitMaterial;
-                passData.emitterMaterial = _emitterMaterial;
-                passData.passSettings = _passSettings;
-                passData.simulationSettings = _simulationSettings;
-                passData.cameraPositionDelta = screenDelta / 2;
-                passData.pixelScreenParams = new Vector4(width, height, _passSettings.pixelsPerUnit, 1 / _passSettings.pixelsPerUnit);
-                passData.viewMatrix = cameraData.GetViewMatrix();
-                passData.projectionMatrix = cameraData.GetProjectionMatrix();
-                passData.textureWidth = textureWidth;
-                passData.textureHeight = textureHeight;
-                passData.isPreviewCamera = cameraData.isPreviewCamera;
-                passData.isSceneViewCamera = cameraData.isSceneViewCamera;
-                passData.previousVelocityTexture = previousVelocityHandle;
-
-                // Use previous velocity texture as input (this makes it available during the pass)
-                builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
-
-                // Set current velocity texture as output
-                builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
-
-                // Set velocity textures as global AFTER this pass completes
-                builder.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
-
-                // Allow setting global shader variables in this pass
-                builder.AllowGlobalStateModification(true);
-
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePass(data, context));
-            }
-
-            // Second pass: Draw emitters
+            // First pass: Draw emitters (write velocity data)
             if (!cameraData.isPreviewCamera && !cameraData.isSceneViewCamera)
             {
                 bool hasLayerMask = _passSettings.layerMask != 0;
@@ -254,7 +222,7 @@ namespace Aarthificial.PixelGraphics.Forward
                             builder.UseRendererList(passData.rendererListHandleRenderingLayerMask);
                         }
 
-                        // Write to current velocity texture
+                        // Write to current velocity texture (emitters write their velocity)
                         builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
 
                         // Allow setting global shader variables in this pass
@@ -263,6 +231,39 @@ namespace Aarthificial.PixelGraphics.Forward
                         builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecuteRendererLists(data, context));
                     }
                 }
+            }
+
+            // Second pass: Simulate velocity (process the emitter data)
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Simulation", out var passData, _profilingSampler))
+            {
+                passData.blitMaterial = _blitMaterial;
+                passData.emitterMaterial = _emitterMaterial;
+                passData.passSettings = _passSettings;
+                passData.simulationSettings = _simulationSettings;
+                passData.cameraPositionDelta = screenDelta / 2;
+                passData.pixelScreenParams = new Vector4(width, height, _passSettings.pixelsPerUnit, 1 / _passSettings.pixelsPerUnit);
+                passData.viewMatrix = cameraData.GetViewMatrix();
+                passData.projectionMatrix = cameraData.GetProjectionMatrix();
+                passData.textureWidth = textureWidth;
+                passData.textureHeight = textureHeight;
+                passData.isPreviewCamera = cameraData.isPreviewCamera;
+                passData.isSceneViewCamera = cameraData.isSceneViewCamera;
+                passData.previousVelocityTexture = previousVelocityHandle;
+
+                // Use previous velocity texture as input (this makes it available during the pass)
+                builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
+
+                // Use current velocity texture as both input (to read emitter data) and output (to write simulation)
+                builder.UseTexture(currentVelocityHandle, AccessFlags.ReadWrite);
+                builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.ReadWrite);
+
+                // Set velocity textures as global AFTER this pass completes
+                builder.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
+
+                // Allow setting global shader variables in this pass
+                builder.AllowGlobalStateModification(true);
+
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePass(data, context));
             }
 
 #if UNITY_EDITOR
