@@ -292,8 +292,8 @@ namespace Aarthificial.PixelGraphics.Forward
                 using (var builder = renderGraph.AddRasterRenderPass<PassData>("Velocity Preview Blit", out var passData, _profilingSampler))
                 {
                     passData.blitMaterial = _blitMaterial;
-                    passData.textureWidth = textureWidth;
-                    passData.textureHeight = textureHeight;
+                    passData.textureWidth = cameraData.camera.pixelWidth;  // Use screen width, not texture width
+                    passData.textureHeight = cameraData.camera.pixelHeight; // Use screen height, not texture height
                     passData.viewMatrix = cameraData.GetViewMatrix();
                     passData.projectionMatrix = cameraData.GetProjectionMatrix();
 
