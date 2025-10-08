@@ -35,7 +35,7 @@ namespace Aarthificial.PixelGraphics.Forward
 
         public override void SetupRenderPasses(ScriptableRenderer renderer, in RenderingData renderingData)
         {
-            _pass.ConfigureTarget(renderer.cameraColorTargetHandle);
+            // Note: ConfigureTarget is not needed for Render Graph - it handles targets internally
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)

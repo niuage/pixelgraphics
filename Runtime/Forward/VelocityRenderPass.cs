@@ -127,6 +127,9 @@ namespace Aarthificial.PixelGraphics.Forward
             int textureWidth = Mathf.FloorToInt(cameraData.camera.pixelWidth * _passSettings.textureScale);
             int textureHeight = Mathf.FloorToInt(cameraData.camera.pixelHeight * _passSettings.textureScale);
 
+            // Debug: Log when passes are being recorded
+            Debug.Log($"[VelocityRenderPass] RecordRenderGraph called - Preview: {_passSettings.preview}, LayerMask: {_passSettings.layerMask.value}, RenderingLayerMask: {_passSettings.renderingLayerMask.value}");
+
             float height = 2 * cameraData.camera.orthographicSize * _passSettings.pixelsPerUnit;
             float width = height * cameraData.camera.aspect;
 
@@ -175,6 +178,9 @@ namespace Aarthificial.PixelGraphics.Forward
                 passData.textureHeight = textureHeight;
                 passData.isPreviewCamera = cameraData.isPreviewCamera;
                 passData.isSceneViewCamera = cameraData.isSceneViewCamera;
+
+                // Prevent the pass from being culled
+                builder.AllowPassCulling(false);
 
                 // Use previous velocity texture as input
                 builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
