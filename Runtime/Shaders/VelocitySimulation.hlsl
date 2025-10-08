@@ -17,8 +17,19 @@ CBUFFER_END
 
 float4 SimulateVelocity(float2 uv)
 {
-    float4 previousData = SAMPLE_PREVIOUS_VELOCITY(0, 0);
     float2 offset = _PG_PreviousVelocityTexture_TexelSize.xy;
+
+    // Check edges first - zero out velocity at borders to prevent instability
+    if (uv.x < offset.x
+        || uv.x > 1 - offset.x
+        || uv.y < offset.y
+        || uv.y > 1 - offset.y
+    )
+    {
+        return float4(0, 0, 0, 0);
+    }
+
+    float4 previousData = SAMPLE_PREVIOUS_VELOCITY(0, 0);
 
     float4 neighbouringData = SAMPLE_PREVIOUS_VELOCITY(offset.x, 0);
     neighbouringData += SAMPLE_PREVIOUS_VELOCITY(-offset.x, 0);
@@ -35,22 +46,23 @@ float4 SimulateVelocity(float2 uv)
     // This is what creates the displacement that the spring will pull back
     float4 temporaryData = SAMPLE_TEXTURE2D(_PG_TemporaryVelocityTexture, sampler_PG_TemporaryVelocityTexture, uv);
     float2 emitterVelocity = temporaryData.zw;
-    distance += emitterVelocity;
 
-    if (uv.x < offset.x
-        || uv.x > 1 - offset.x
-        || uv.y < offset.y
-        || uv.y > 1 - offset.y
-    )
+    // Only add emitter velocity if it's significant (avoid accumulating tiny floating point errors)
+    if (abs(emitterVelocity.x) > 0.0001 || abs(emitterVelocity.y) > 0.0001)
     {
-        velocity = 0;
-        distance = 0;
+        distance += emitterVelocity;
     }
 
     float dt = min(unity_DeltaTime.x, _PG_VelocitySimulationParams.w);
     float2 acceleration = -distance * _PG_VelocitySimulationParams.x - velocity * _PG_VelocitySimulationParams.y;
     velocity += acceleration * dt;
     distance += velocity * dt;
+
+    // Clamp extremely small values to exactly zero to prevent floating point drift
+    if (abs(distance.x) < 0.0001) distance.x = 0;
+    if (abs(distance.y) < 0.0001) distance.y = 0;
+    if (abs(velocity.x) < 0.0001) velocity.x = 0;
+    if (abs(velocity.y) < 0.0001) velocity.y = 0;
 
     return float4(distance.x, distance.y, velocity.x, velocity.y);
 }
