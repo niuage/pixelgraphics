@@ -56,7 +56,7 @@ float4 SimulateVelocity(float2 uv)
 
     // SIMPLE EXPONENTIAL DECAY (for testing)
     // Comment this block and uncomment the spring physics block below to switch
-    float decayRate = 0.95; // 0.95 = keep 95% each frame (adjust between 0.8-0.98)
+    float decayRate = 0.8; // 0.95 = keep 95% each frame (adjust between 0.8-0.98)
     velocity *= decayRate;
     distance *= decayRate;
 
