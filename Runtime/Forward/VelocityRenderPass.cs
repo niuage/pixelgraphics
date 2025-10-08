@@ -250,12 +250,12 @@ namespace Aarthificial.PixelGraphics.Forward
                 passData.isSceneViewCamera = cameraData.isSceneViewCamera;
                 passData.previousVelocityTexture = previousVelocityHandle;
 
-                // Use previous velocity texture as input (this makes it available during the pass)
+                // Use previous velocity texture as input
                 builder.UseTexture(previousVelocityHandle, AccessFlags.Read);
 
-                // Use current velocity texture as both input (to read emitter data) and output (to write simulation)
-                builder.UseTexture(currentVelocityHandle, AccessFlags.ReadWrite);
-                builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.ReadWrite);
+                // Set current velocity texture as output - Don't use UseTexture, just SetRenderAttachment
+                // The emitter pass wrote to it, now simulation will overwrite it
+                builder.SetRenderAttachment(currentVelocityHandle, 0, AccessFlags.Write);
 
                 // Set velocity textures as global AFTER this pass completes
                 builder.SetGlobalTextureAfterPass(currentVelocityHandle, ShaderIds.VelocityTexture);
