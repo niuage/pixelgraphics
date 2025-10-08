@@ -44,14 +44,17 @@
             #pragma multi_compile _ _USE_DRAW_PROCEDURAL
 
             #include "Packages/com.aarthificial.pixelgraphics/Runtime/Shaders/Fullscreen.hlsl"
-            #include "Packages/com.aarthificial.pixelgraphics/Runtime/Shaders/VelocitySimulation.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            TEXTURE2D(_PG_VelocityTexture);
+            SAMPLER(sampler_PG_VelocityTexture);
 
             float4 Fragment(Varyings input) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                // Get the simulated velocity (which already includes emitter data merged in)
-                float4 result = SimulateVelocity(input.uv);
+                // Read the FINAL simulated velocity texture (not re-simulate!)
+                float4 result = SAMPLE_TEXTURE2D(_PG_VelocityTexture, sampler_PG_VelocityTexture, input.uv);
 
                 // Preview visualization: remap velocity from [-1, 1] to [0, 1] for display
                 // Velocity is stored in zw components (xy is distance)
